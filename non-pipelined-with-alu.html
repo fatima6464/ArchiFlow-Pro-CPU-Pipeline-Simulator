@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ArchiFlow Pro | Non-Pipelined Master with ALU</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&family=Space+Grotesk:wght@700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #020617;
+      --card: #0f172a;
+      --accent: #38bdf8;
+      --if: #f87171; --id: #fbbf24; --ex: #34d399; --mem: #60a5fa; --wb: #f472b6;
+    }
+    body { 
+        background: var(--bg); 
+        color: #f8fafc; 
+        font-family: 'Plus Jakarta Sans', sans-serif; 
+        overflow: hidden; 
+        height: 100vh; 
+        display: flex; 
+        flex-direction: column;
+        padding: 0 40px;
+    }
+    .space-font { font-family: 'Space Grotesk', sans-serif; }
+    
+    .hw-node {
+      width: 160px; height: 90px;
+      transition: all 0.4s ease;
+      border: 2px solid #1e293b;
+      background: transparent;
+      border-radius: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      opacity: 0.2;
+    }
+    
+    .hw-node.active {
+      opacity: 1;
+      border-color: var(--clr) !important;
+      box-shadow: 0 0 25px -5px var(--clr);
+      background: rgba(255, 255, 255, 0.05);
+    }
+    
+    .calc-display {
+      position: absolute;
+      bottom: 5px;
+      font-size: 9px;
+      color: #94a3b8;
+      font-weight: 600;
+      text-align: center;
+      width: 90%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .instr-slot {
+      position: absolute;
+      top: -40px;
+      width: 140px;
+      height: 28px;
+      background: linear-gradient(135deg, #fff, #e2e8f0);
+      color: #000;
+      font-weight: 800;
+      font-size: 11px;
+      border-radius: 6px;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      text-transform: uppercase;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+      z-index: 50;
+      padding: 0 10px;
+    }
+    
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    
+    .tag { 
+      padding: 4px 10px; 
+      border-radius: 6px; 
+      color: #000; 
+      font-weight: 800; 
+      font-size: 11px; 
+      min-width: 40px;
+      text-align: center;
+    }
+    
+    .register-cell {
+      width: 70px;
+      height: 35px;
+      background: rgba(30, 41, 59, 0.5);
+      border: 1px solid #334155;
+      border-radius: 6px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s ease;
+    }
+    
+    .register-cell.updated {
+      background: rgba(34, 197, 94, 0.2);
+      border-color: #22c55e;
+      animation: registerPulse 0.5s;
+    }
+    
+    @keyframes registerPulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+      100% { transform: scale(1); }
+    }
+
+    .pulse-neon {
+      animation: neonGlow 2s infinite;
+    }
+    @keyframes neonGlow {
+      0%, 100% { box-shadow: 0 0 5px var(--accent); transform: scale(1); }
+      50% { box-shadow: 0 0 20px var(--accent); transform: scale(1.02); }
+    }
+    
+    .metric-box {
+      background: rgba(30, 41, 59, 0.5);
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 12px;
+      min-width: 120px;
+    }
+
+    .alu-log-container {
+      background: rgba(30, 41, 59, 0.4);
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 12px;
+    }
+  </style>
+</head>
+<body class="py-4">
+
+  <header class="flex justify-between items-center mb-4">
+    <div>
+      <h1 class="text-4xl font-extrabold space-font tracking-tighter text-white uppercase">Non-Pipeline <span class="text-sky-400">ALU Simulator</span></h1>
+      <p class="text-slate-500 text-xs font-bold tracking-[0.2em] uppercase">Computer Architecture with Real Calculations</p>
+    </div>
+    <div class="flex items-center justify-center gap-4">
+      <div class="metric-box">
+        <div class="text-[10px] text-slate-500 font-bold uppercase">CPI</div>
+        <div id="cpiVal" class="text-lg text-white font-extrabold">5.00</div>
+      </div>
+      <button onclick="openModal()" class="flex items-center justify-center gap-2 px-6 py-4 bg-sky-400 border border-white text-slate-950 font-extrabold rounded-xl shadow-lg pulse-neon text-md hover:rounded-full transition-all">
+        <i class="fa-solid fa-code-branch text-2xl"></i>
+        <span>SET UP INSTRUCTIONS</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="flex-1 flex flex-col gap-4 overflow-hidden">
+    
+    <!-- Non-Pipelined Execution Unit -->
+    <div class="bg-slate-900/40 rounded-2xl p-8 border border-slate-800 relative">
+      <div class="flex justify-around items-center relative z-10">
+        <div class="hw-node" id="u0" style="--clr:var(--if)">
+          <div id="t0" class="instr-slot"></div>
+          <span class="text-[9px] text-slate-500 font-bold">STAGE 1</span>
+          <span class="font-extrabold text-sm uppercase">Fetch</span>
+          <div id="c0" class="calc-display"></div>
+        </div>
+        <div class="hw-node" id="u1" style="--clr:var(--id)">
+          <div id="t1" class="instr-slot"></div>
+          <span class="text-[9px] text-slate-500 font-bold">STAGE 2</span>
+          <span class="font-extrabold text-sm uppercase">Decode</span>
+          <div id="c1" class="calc-display"></div>
+        </div>
+        <div class="hw-node" id="u2" style="--clr:var(--ex)">
+          <div id="t2" class="instr-slot"></div>
+          <span class="text-[9px] text-slate-500 font-bold">STAGE 3</span>
+          <span class="font-extrabold text-sm uppercase">Execute</span>
+          <div id="c2" class="calc-display"></div>
+        </div>
+        <div class="hw-node" id="u3" style="--clr:var(--mem)">
+          <div id="t3" class="instr-slot"></div>
+          <span class="text-[9px] text-slate-500 font-bold">STAGE 4</span>
+          <span class="font-extrabold text-sm uppercase">Memory</span>
+          <div id="c3" class="calc-display"></div>
+        </div>
+        <div class="hw-node" id="u4" style="--clr:var(--wb)">
+          <div id="t4" class="instr-slot"></div>
+          <span class="text-[9px] text-slate-500 font-bold">STAGE 5</span>
+          <span class="font-extrabold text-sm uppercase">Writeback</span>
+          <div id="c4" class="calc-display"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Register File + ALU Log (side by side) -->
+    <div class="flex gap-4 flex-1 min-h-0">
+
+      <!-- Register File -->
+      <div class="bg-slate-900/40 rounded-2xl p-5 border border-slate-800 w-3/5 flex flex-col">
+        <h3 class="space-font text-sm font-extrabold text-sky-400 uppercase tracking-widest mb-3">Register File (R0-R7)</h3>
+        <div class="grid grid-cols-4 gap-3 flex-1 content-start">
+          <div class="register-cell" id="reg0">
+            <span class="text-[10px] text-slate-500 font-bold">R0</span>
+            <span class="text-sm font-extrabold" id="val0">0</span>
+          </div>
+          <div class="register-cell" id="reg1">
+            <span class="text-[10px] text-slate-500 font-bold">R1</span>
+            <span class="text-sm font-extrabold" id="val1">0</span>
+          </div>
+          <div class="register-cell" id="reg2">
+            <span class="text-[10px] text-slate-500 font-bold">R2</span>
+            <span class="text-sm font-extrabold" id="val2">10</span>
+          </div>
+          <div class="register-cell" id="reg3">
+            <span class="text-[10px] text-slate-500 font-bold">R3</span>
+            <span class="text-sm font-extrabold" id="val3">20</span>
+          </div>
+          <div class="register-cell" id="reg4">
+            <span class="text-[10px] text-slate-500 font-bold">R4</span>
+            <span class="text-sm font-extrabold" id="val4">0</span>
+          </div>
+          <div class="register-cell" id="reg5">
+            <span class="text-[10px] text-slate-500 font-bold">R5</span>
+            <span class="text-sm font-extrabold" id="val5">0</span>
+          </div>
+          <div class="register-cell" id="reg6">
+            <span class="text-[10px] text-slate-500 font-bold">R6</span>
+            <span class="text-sm font-extrabold" id="val6">0</span>
+          </div>
+          <div class="register-cell" id="reg7">
+            <span class="text-[10px] text-slate-500 font-bold">R7</span>
+            <span class="text-sm font-extrabold" id="val7">0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ALU Log (now taking more space) -->
+      <div class="flex-1 flex flex-col alu-log-container">
+        <h3 class="space-font text-sm font-extrabold text-sky-400 uppercase tracking-widest mb-3">ALU & Execution Log</h3>
+        <div id="aluLog" class="flex-1 text-xs font-mono bg-slate-950 p-4 rounded-lg border border-slate-800 overflow-y-auto">
+          <div class="text-slate-500">Waiting for ALU operations...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Timeline Diagram -->
+    <div class="flex-1 bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden flex flex-col">
+      <div class="p-5 bg-slate-800/50 border-b border-slate-700 flex justify-between items-center">
+        <div>
+          <h3 class="space-font text-sm font-extrabold text-sky-400 uppercase tracking-widest">Space-Time Diagram</h3>
+          <p id="status" class="text-xs text-slate-300 font-bold mt-1 uppercase">Ready: Configure Program</p>
+        </div>
+        
+        <div class="flex gap-4 items-center">
+          <button id="stepBtn" onclick="nextStep()" disabled class="px-6 py-3 rounded-full font-extrabold text-xs bg-white text-black hover:bg-slate-200 disabled:opacity-10 transition-all">
+            START EXECUTION
+          </button>
+          <button id="playBtn" onclick="autoPlay()" disabled class="px-6 py-3 rounded-full font-extrabold text-xs bg-sky-600 text-white hover:bg-sky-500 disabled:opacity-10 transition-all">
+            AUTO PLAY
+          </button>
+          <button id="stopBtn" onclick="stopAutoPlay()" class="hidden px-6 py-3 rounded-full font-extrabold text-xs bg-red-600 text-white hover:bg-red-500 transition-all">
+            STOP
+          </button>
+          <button onclick="location.reload()" class="px-6 py-3 rounded-full font-extrabold text-xs bg-slate-700 text-white hover:bg-slate-600">
+            RESET
+          </button>
+          
+          <div class="ml-4 flex gap-6 border-l border-slate-700 pl-6">
+            <div class="text-right">
+              <span class="text-[10px] text-slate-500 font-bold block uppercase">Time</span>
+              <span id="timeVal" class="text-lg text-white font-extrabold">0.00 ns</span>
+            </div>
+            <div class="text-right">
+              <span class="text-[10px] text-slate-500 font-bold block uppercase">Cycles</span>
+              <span id="clkVal" class="text-lg text-sky-400 font-extrabold">0</span>
+            </div>
+            <div class="text-right">
+              <span class="text-[10px] text-slate-500 font-bold block uppercase">Instruction</span>
+              <span id="instNum" class="text-lg text-emerald-400 font-extrabold">0/0</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex-1 overflow-auto no-scrollbar" id="mainScroll">
+        <div class="overflow-x-auto no-scrollbar" id="xScroll">
+          <table class="w-full border-collapse">
+            <thead><tr id="thr" class="text-[11px] text-slate-500 uppercase font-bold"><th class="sticky-col p-5 text-left border-b border-slate-800">Instruction</th></tr></thead>
+            <tbody id="tbr"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Configuration Modal -->
+  <div id="modal" class="fixed inset-0 bg-slate-950/90 z-[100] flex items-center justify-center p-4 hidden">
+    <div class="max-w-2xl w-full bg-slate-900 border border-slate-800 p-8 rounded-2xl shadow-2xl">
+      <h2 class="space-font text-2xl font-extrabold text-white mb-2 uppercase">Non-Pipelined ALU Configuration</h2>
+      <p class="text-slate-400 text-xs mb-6 uppercase">Set instructions with real ALU operations</p>
+      <div class="space-y-6">
+        <div>
+          <label class="text-xs font-bold text-slate-500 uppercase">Program Type</label>
+          <select id="mode" onchange="toggleInp()" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 mt-2 text-sm text-white outline-none">
+            <option value="demo">Demo ALU Program</option>
+            <option value="custom">Custom Assembly</option>
+            <option value="arithmetic">Arithmetic Test</option>
+            <option value="memory">Memory Test</option>
+          </select>
+        </div>
+        
+        <div id="demoInp">
+          <label class="text-xs font-bold text-slate-500 uppercase">Select Demo Program</label>
+          <select id="demoProg" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 mt-2 text-sm text-white outline-none">
+            <option value="simple">Simple Arithmetic (3 ops)</option>
+            <option value="complex">Complex Calculations (5 ops)</option>
+            <option value="logic">Logic Operations (4 ops)</option>
+            <option value="mixed">Mixed Ops with Memory (6 ops)</option>
+          </select>
+        </div>
+        
+        <div id="customInp" class="hidden">
+          <label class="text-xs font-bold text-slate-500 uppercase">Custom Assembly Instructions</label>
+          <div class="mb-2 text-xs text-slate-400">
+            Format examples:<br>
+            ADD R1, R2, R3<br>
+            ADDI R5, R1, 15<br>
+            LW R4, 0(R2)<br>
+            SW R6, 8(R0)<br>
+            Any number of instructions is allowed
+          </div>
+          <textarea id="instrText" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 mt-2 text-sm text-white h-48" placeholder="ADD R1, R2, R3&#10;SUB R4, R1, R2&#10;ADDI R5, R4, 100&#10;AND R6, R5, R3&#10;SW R6, 0(R0)"></textarea>
+        </div>
+        
+        <div id="arithmeticInp" class="hidden">
+          <label class="text-xs font-bold text-slate-500 uppercase">Arithmetic Test Parameters</label>
+          <div class="grid grid-cols-2 gap-4 mt-2">
+            <div>
+              <label class="text-xs text-slate-400">Initial R2 value</label>
+              <input type="number" id="initR2" value="10" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 mt-1 text-sm text-white">
+            </div>
+            <div>
+              <label class="text-xs text-slate-400">Initial R3 value</label>
+              <input type="number" id="initR3" value="20" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 mt-1 text-sm text-white">
+            </div>
+          </div>
+        </div>
+        
+        <div id="memoryInp" class="hidden">
+          <label class="text-xs font-bold text-slate-500 uppercase">Memory Test Setup</label>
+          <div class="text-xs text-slate-400 mb-2">
+            Initial memory values: MEM[0]=100, MEM[4]=200, MEM[8]=0<br>
+            Will perform load/store operations
+          </div>
+        </div>
+        
+        <button onclick="initAdvancedSim()" class="w-full py-4 bg-sky-500 text-slate-950 font-extrabold rounded-xl uppercase text-xs hover:bg-sky-400 transition-all">
+          Initialize Non-Pipelined Simulation
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ──────────────────────────────────────────────
+    // State
+    // ──────────────────────────────────────────────
+    let instructions = [];
+    let clk = 0, iIdx = 0, sIdx = 0, playInt = null;
+    const colors = ['#f87171', '#fbbf24', '#34d399', '#60a5fa', '#f472b6'];
+    const names = ['IF', 'ID', 'EX', 'MEM', 'WB'];
+    
+    let registers = [0, 0, 10, 20, 0, 0, 0, 0];
+    let memory = [0, 0, 0, 0, 0, 0, 0, 0]; // indices 0,1,2 → addr 0,4,8
+    
+    let currentInstruction = null;
+    let currentStageData = {};
+    
+    const aluOperations = {
+      'ADD':  {type: 'R', exec: (a, b) => a + b,     desc: 'Addition'},
+      'SUB':  {type: 'R', exec: (a, b) => a - b,     desc: 'Subtraction'},
+      'AND':  {type: 'R', exec: (a, b) => a & b,     desc: 'Bitwise AND'},
+      'OR':   {type: 'R', exec: (a, b) => a | b,     desc: 'Bitwise OR'},
+      'XOR':  {type: 'R', exec: (a, b) => a ^ b,     desc: 'Bitwise XOR'},
+      'ADDI': {type: 'I', exec: (a, imm) => a + imm, desc: 'Add Immediate'},
+      'LW':   {type: 'I', exec: (base, offset) => memory[(base + offset)/4], desc: 'Load Word'},
+      'SW':   {type: 'I', exec: (value, base, offset) => {
+        memory[(base + offset)/4] = value;
+        return value;
+      }, desc: 'Store Word'},
+    };
+
+    // ──────────────────────────────────────────────
+    // UI Helpers
+    // ──────────────────────────────────────────────
+    function toggleInp() {
+      const mode = document.getElementById('mode').value;
+      document.getElementById('demoInp').classList.toggle('hidden', mode !== 'demo');
+      document.getElementById('customInp').classList.toggle('hidden', mode !== 'custom');
+      document.getElementById('arithmeticInp').classList.toggle('hidden', mode !== 'arithmetic');
+      document.getElementById('memoryInp').classList.toggle('hidden', mode !== 'memory');
+    }
+    
+    function openModal() { 
+      document.getElementById('modal').classList.remove('hidden'); 
+    }
+    
+    function closeModal() { 
+      document.getElementById('modal').classList.add('hidden'); 
+    }
+
+    function logALUOperation(msg) {
+      const log = document.getElementById('aluLog');
+      const entry = document.createElement('div');
+      entry.className = 'mb-1 text-slate-300';
+      entry.innerHTML = `<span class="text-slate-500">[C${clk}]</span> ${msg}`;
+      log.appendChild(entry);
+      log.scrollTop = log.scrollHeight;
+      
+      while(log.children.length > 12) {
+        log.removeChild(log.firstChild);
+      }
+    }
+
+    function updateRegisterDisplay() {
+      for(let i = 0; i < 8; i++) {
+        document.getElementById(`val${i}`).innerText = registers[i];
+        document.getElementById(`reg${i}`).classList.remove('updated');
+      }
+    }
+
+    // ──────────────────────────────────────────────
+    // Instruction Parsing & Demo Programs
+    // ──────────────────────────────────────────────
+    function parseInstruction(instStr) {
+      const parts = instStr.toUpperCase().replace(/,/g, '').split(' ');
+      const opcode = parts[0];
+      
+      if (!aluOperations[opcode]) {
+        return {raw: instStr, valid: false, error: `Unknown opcode: ${opcode}`};
+      }
+      
+      const inst = aluOperations[opcode];
+      const result = {opcode, type: inst.type, raw: instStr, valid: true};
+      
+      if (inst.type === 'R') {
+        if (parts.length < 4) return {raw: instStr, valid: false};
+        result.rd = parseInt(parts[1].replace('R',''));
+        result.rs = parseInt(parts[2].replace('R',''));
+        result.rt = parseInt(parts[3].replace('R',''));
+      } else if (inst.type === 'I') {
+        if (opcode === 'LW' || opcode === 'SW') {
+          const memMatch = parts[2].match(/(-?\d+)\(R(\d+)\)/);
+          if (!memMatch) return {raw: instStr, valid: false};
+          const offset = parseInt(memMatch[1]);
+          const rs    = parseInt(memMatch[2]);
+          
+          if (opcode === 'LW') {
+            result.rd = parseInt(parts[1].replace('R',''));
+            result.offset = offset;
+            result.rs = rs;
+          } else {
+            result.rt = parseInt(parts[1].replace('R',''));
+            result.offset = offset;
+            result.rs = rs;
+          }
+        } else { // ADDI
+          if (parts.length < 4) return {raw: instStr, valid: false};
+          result.rt  = parseInt(parts[1].replace('R',''));
+          result.rs  = parseInt(parts[2].replace('R',''));
+          result.imm = parseInt(parts[3]);
+        }
+      }
+      return result;
+    }
+
+    function generateDemoProgram(type) {
+      switch(type) {
+        case 'simple': return ["ADD R1, R2, R3","SUB R4, R1, R2","AND R5, R1, R4"];
+        case 'complex': return ["ADD R1, R2, R3","SUB R4, R1, R2","AND R5, R1, R4","OR R6, R2, R3","XOR R7, R1, R6"];
+        case 'logic': return ["AND R1, R2, R3","OR R4, R1, R2","XOR R5, R4, R3","AND R6, R5, R1"];
+        case 'mixed': return ["ADD R1, R2, R3","SW R1, 0(R0)","LW R4, 0(R0)","SUB R5, R4, R2","ADDI R6, R5, 10","AND R7, R6, R1"];
+        default: return ["ADD R1, R2, R3"];
+      }
+    }
+
+    // ──────────────────────────────────────────────
+    // Core Simulation Logic
+    // ──────────────────────────────────────────────
+    function initAdvancedSim() {
+      const mode = document.getElementById('mode').value;
+      
+      if(mode === 'arithmetic') {
+        registers[2] = parseInt(document.getElementById('initR2').value) || 10;
+        registers[3] = parseInt(document.getElementById('initR3').value) || 20;
+      }
+      if(mode === 'memory') {
+        memory[0] = 100;
+        memory[1] = 200;
+        memory[2] = 0;
+      }
+      
+      if(mode === 'demo') {
+        instructions = generateDemoProgram(document.getElementById('demoProg').value);
+      } else if(mode === 'custom') {
+        const text = document.getElementById('instrText').value;
+        instructions = text.split('\n')
+          .map(l => l.trim())
+          .filter(l => l.length > 0);
+      } else if(mode === 'arithmetic') {
+        instructions = [
+          `ADD R1, R2, R3`,
+          `SUB R4, R1, R2`,
+          `ADDI R5, R1, 15`,
+          `AND R6, R4, R5`,
+          `OR R7, R1, R6`
+        ];
+      } else if(mode === 'memory') {
+        instructions = [
+          `LW R1, 0(R0)`,
+          `LW R2, 4(R0)`,
+          `ADD R3, R1, R2`,
+          `SW R3, 8(R0)`,
+          `LW R4, 8(R0)`,
+          `SUB R5, R4, R1`
+        ];
+      }
+      
+      if(!instructions.length) {
+        alert("No instructions provided!");
+        return;
+      }
+      
+      // Parse
+      instructions = instructions.map(parseInstruction);
+      
+      const errors = instructions.filter(i => !i.valid);
+      if(errors.length > 0) {
+        alert("Some instructions could not be parsed:\n" + errors.map(e => "• " + e.raw + " → " + e.error).join('\n'));
+        return;
+      }
+      
+      // Reset state
+      clk = 0; iIdx = 0; sIdx = 0;
+      currentInstruction = null;
+      currentStageData = {};
+      
+      document.getElementById('clkVal').innerText = "0";
+      document.getElementById('timeVal').innerText = "0.00 ns";
+      document.getElementById('instNum').innerText = `0/${instructions.length}`;
+      document.getElementById('cpiVal').innerText = "5.00";
+      document.getElementById('stepBtn').disabled = false;
+      document.getElementById('playBtn').disabled = false;
+      document.getElementById('stepBtn').innerText = "START EXECUTION";
+      document.getElementById('status').innerText = `READY: ${instructions.length} instructions loaded`;
+      
+      updateRegisterDisplay();
+      
+      document.getElementById('aluLog').innerHTML = `<div class="text-slate-400">Program loaded — ${instructions.length} instructions ready.</div>`;
+      
+      // Build timeline header + rows
+      document.getElementById('thr').innerHTML = `<th class="sticky-col p-5 text-left border-b border-slate-800">Instruction</th>`;
+      document.getElementById('tbr').innerHTML = instructions.map((inst, i) => `
+        <tr id="r-${i}" class="border-b border-slate-800">
+          <td class="sticky-col p-5 font-extrabold text-[10px] text-sky-400 uppercase tracking-tighter">${inst.raw}</td>
+        </tr>`).join('');
+      
+      // Clear visuals
+      document.querySelectorAll('.hw-node').forEach(u => u.classList.remove('active'));
+      for(let i = 0; i < 5; i++) {
+        document.getElementById('t' + i).style.display = "none";
+        document.getElementById('c' + i).innerText = "";
+      }
+      
+      closeModal();
+    }
+
+    function moveToken(idx) {
+      for(let i = 0; i < 5; i++) {
+        const el = document.getElementById('t' + i);
+        el.style.display = "none";
+        el.innerHTML = "";
+      }
+      if(idx < 0) return;
+      const slot = document.getElementById('t' + idx);
+      slot.style.display = "flex";
+      if(currentInstruction) slot.innerHTML = currentInstruction.raw;
+    }
+
+    function clearCalcDisplays() {
+      for(let i = 0; i < 5; i++) document.getElementById('c' + i).innerText = '';
+    }
+
+    function executeStage(stage) {
+      if(!currentInstruction?.valid) return;
+      clearCalcDisplays();
+      const disp = document.getElementById('c' + stage);
+      
+      switch(stage) {
+        case 0: // IF
+          disp.innerText = `PC: 0x${(iIdx * 4).toString(16).padStart(8,'0')}`;
+          logALUOperation(`IF: Fetching ${currentInstruction.raw}`);
+          break;
+          
+        case 1: // ID
+          let rsVal = registers[currentInstruction.rs] ?? 0;
+          let rtVal = (currentInstruction.opcode !== 'SW') ? (registers[currentInstruction.rt] ?? 0) : 0;
+          currentStageData.rsVal = rsVal;
+          currentStageData.rtVal = rtVal;
+          disp.innerText = `R${currentInstruction.rs ?? '?'} = ${rsVal}, R${currentInstruction.rt ?? '?'} = ${rtVal}`;
+          logALUOperation(`ID: Read registers`);
+          break;
+          
+        case 2: // EX
+          const op = aluOperations[currentInstruction.opcode];
+          let text = '';
+          
+          if(currentInstruction.type === 'R') {
+            const res = op.exec(currentStageData.rsVal, currentStageData.rtVal);
+            currentStageData.result = res;
+            text = `${currentStageData.rsVal} ${currentInstruction.opcode} ${currentStageData.rtVal} = ${res}`;
+          }
+          else if(currentInstruction.opcode === 'ADDI') {
+            const res = op.exec(currentStageData.rsVal, currentInstruction.imm);
+            currentStageData.result = res;
+            text = `${currentStageData.rsVal} + ${currentInstruction.imm} = ${res}`;
+          }
+          else if(currentInstruction.opcode === 'LW' || currentInstruction.opcode === 'SW') {
+            const addr = currentStageData.rsVal + currentInstruction.offset;
+            currentStageData.addr = addr;
+            text = `Effective address = ${currentStageData.rsVal} + ${currentInstruction.offset} = ${addr}`;
+          }
+          disp.innerText = text;
+          logALUOperation(`EX: ${text}`);
+          break;
+          
+        case 3: // MEM
+          if(currentInstruction.opcode === 'LW') {
+            const val = memory[currentStageData.addr / 4] ?? 0;
+            currentStageData.result = val;
+            disp.innerText = `MEM[${currentStageData.addr}] → ${val}`;
+            logALUOperation(`MEM: Loaded ${val}`);
+          } else if(currentInstruction.opcode === 'SW') {
+            memory[currentStageData.addr / 4] = currentStageData.rtVal ?? registers[currentInstruction.rt];
+            disp.innerText = `MEM[${currentStageData.addr}] ← ${currentStageData.rtVal}`;
+            logALUOperation(`MEM: Stored value`);
+          } else {
+            disp.innerText = "—";
+          }
+          break;
+          
+        case 4: // WB
+          if(currentInstruction.rd !== undefined && currentStageData.result !== undefined) {
+            const rd = currentInstruction.rd;
+            const old = registers[rd];
+            registers[rd] = currentStageData.result;
+            document.getElementById(`reg${rd}`).classList.add('updated');
+            document.getElementById(`val${rd}`).innerText = currentStageData.result;
+            disp.innerText = `R${rd} ← ${currentStageData.result}`;
+            logALUOperation(`WB: Wrote R${rd} = ${currentStageData.result}`);
+          } else {
+            disp.innerText = currentInstruction.opcode === 'SW' ? "Store completed" : "—";
+          }
+          break;
+      }
+    }
+
+    function nextStep() {
+      if(iIdx >= instructions.length) { 
+        stopAutoPlay(); 
+        document.getElementById('status').innerText = `EXECUTION COMPLETE`;
+        return; 
+      }
+      
+      document.getElementById('stepBtn').innerText = "STEP NEXT CYCLE";
+      clk++;
+      document.getElementById('clkVal').innerText = clk;
+      document.getElementById('timeVal').innerText = (clk * 2.0).toFixed(2) + " ns";
+      document.getElementById('instNum').innerText = `${iIdx+1}/${instructions.length}`;
+      
+      if(sIdx === 0) {
+        currentInstruction = instructions[iIdx];
+        currentStageData = {};
+        logALUOperation(`→ Starting instruction ${iIdx+1}: ${currentInstruction.raw}`);
+      }
+      
+      document.querySelectorAll('.hw-node').forEach(u => u.classList.remove('active'));
+      document.getElementById('u'+sIdx).classList.add('active');
+      moveToken(sIdx);
+      
+      executeStage(sIdx);
+      
+      const stageNames = ['Fetching','Decoding','Executing','Memory','Writeback'];
+      document.getElementById('status').innerText = `${stageNames[sIdx]} → ${currentInstruction.raw}`;
+      
+      // Extend table if needed
+      const thr = document.getElementById('thr');
+      if(thr.cells.length <= clk) {
+        thr.innerHTML += `<th class="p-5 text-center border-b border-slate-800 min-w-[90px]">Cycle ${clk}</th>`;
+        for(let r = 0; r < instructions.length; r++) {
+          document.getElementById('r-'+r).insertCell(-1).className = "p-3 border-l border-slate-800 text-center";
+        }
+      }
+      
+      const cell = document.getElementById('r-'+iIdx).cells[clk];
+      cell.innerHTML = `<span class="tag" style="background:${colors[sIdx]}">${names[sIdx]}</span>`;
+      cell.title = document.getElementById('c'+sIdx).innerText;
+      
+      // Auto-scroll
+      document.getElementById('xScroll').scrollLeft = document.getElementById('xScroll').scrollWidth;
+      const row = document.getElementById('r-'+iIdx);
+      document.getElementById('mainScroll').scrollTop = row.offsetTop - 100;
+      
+      sIdx++;
+      if(sIdx > 4) {
+        sIdx = 0;
+        iIdx++;
+        currentInstruction = null;
+        currentStageData = {};
+        document.querySelectorAll('.hw-node').forEach(u => u.classList.remove('active'));
+        moveToken(-1);
+        clearCalcDisplays();
+      }
+      
+      if(iIdx >= instructions.length) {
+        document.getElementById('stepBtn').disabled = true;
+        document.getElementById('playBtn').disabled = true;
+        document.getElementById('status').innerText = `EXECUTION COMPLETE — ${clk} cycles`;
+        const cpi = (clk / instructions.length).toFixed(2);
+        document.getElementById('cpiVal').innerText = cpi;
+        logALUOperation(`✓ Finished — CPI = ${cpi}`);
+        stopAutoPlay();
+      }
+    }
+
+    function autoPlay() {
+      document.getElementById('playBtn').classList.add('hidden');
+      document.getElementById('stopBtn').classList.remove('hidden');
+      playInt = setInterval(nextStep, 600);
+    }
+    
+    function stopAutoPlay() {
+      clearInterval(playInt);
+      document.getElementById('playBtn').classList.remove('hidden');
+      document.getElementById('stopBtn').classList.add('hidden');
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      updateRegisterDisplay();
+    });
+  </script>
+</body>
+</html>
