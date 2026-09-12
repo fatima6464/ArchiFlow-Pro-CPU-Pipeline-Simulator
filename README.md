@@ -53,6 +53,9 @@ open non-pipelined.html   # or non-pipelined-with-alu.html
 
 Or try it live via GitHub Pages (see below).
 
+<img width="1917" height="908" alt="image" src="https://github.com/user-attachments/assets/88cf2235-fd54-4472-b8ab-68d0343bc8d2" />
+
+
 ## 🌐 Live Demo (optional setup)
 
 Since this is pure HTML/CSS/JS, you can host it for free with **GitHub Pages**:
@@ -60,6 +63,9 @@ Since this is pure HTML/CSS/JS, you can host it for free with **GitHub Pages**:
 2. Under "Source," select the `main` branch and root folder
 3. Save — your simulator will be live at:
    `https://<your-username>.github.io/ArchiFlow-Pro-CPU-Pipeline-Simulator/non-pipelined.html`
+
+   <img width="1917" height="276" alt="image" src="https://github.com/user-attachments/assets/6a21ae77-9536-418b-80bd-ea377b1104c2" />
+
 
 ## 🕹️ Usage
 
